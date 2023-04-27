@@ -1,0 +1,82 @@
+from vtkmodules.vtkInteractionStyle import vtkInteractorStyleUser
+from vtkmodules.vtkRenderingCore import vtkCellPicker, vtkColorTransferFunction
+import paraview.servermanager
+import paraview.simple
+from collections import namedtuple
+import sys
+
+color_space = {'RGB' : 0, 'HSV' : 1, 'CIELAB' : 2, 'Diverging' : 3, 'Step' : 4}
+
+if 'interactor' not in sys.modules : #if we are in normal mode 
+    basic_interactor = paraview.servermanager.GetRenderView().GetInteractor().GetInteractorStyle()
+
+    def leftDown(arg1, arg2):
+        (x, y) = arg1.GetLastPos()
+        cellPicker = vtkCellPicker()
+        ren = paraview.servermanager.GetRenderView().GetRenderer()
+        cellPicker.Pick(x,y,0,ren)
+        cell_id = cellPicker.GetCellId()
+        block_index = cellPicker.GetFlatBlockIndex()
+        act = cellPicker.GetActors()
+        map = act.GetItemAsObject(0).GetMapper()
+        block = map.GetInputDataObject(0,0).GetBlock(block_index-1)
+        mode = paraview.simple.GetDisplayProperties().ColorArrayName[0]
+        array_name = paraview.simple.GetDisplayProperties().ColorArrayName[1]
+        if mode == 'CELLS' : 
+            new_value = block.GetCellData().GetArray(array_name).GetValue(cell_id)
+        elif mode == 'POINTS' : 
+            new_value = block.GetPointData().GetArray(array_name).GetValue(cell_id)
+
+        m = paraview.simple.GetColorTransferFunction(paraview.simple.GetDisplayProperties().ColorArrayName[1])
+
+        # we create a new color transfert object which is a copy of the original one, so we can add the new color in it after
+        color_transfer_object = vtkColorTransferFunction()
+        color_transfer_object.SetColorSpace(color_space[m.ColorSpace.GetElement(0)])
+        for i in range(int(len(m.RGBPoints)/4)) : 
+            color_transfer_object.AddRGBPoint(m.RGBPoints[(i*4)], m.RGBPoints[(i*4) +1], m.RGBPoints[(i*4) +2], m.RGBPoints[(i*4) +3])
+
+        m.Discretize = 0
+        m.ColorSpace = 'Step'
+        tab = m.RGBPoints
+        nb_points = int(len(tab)/4)
+        list_values = [tab[i*4] for i in range(nb_points)]
+        if new_value not in list_values : 
+            list_new_values = list_values + [new_value]
+            list_new_values.sort()
+            new_tab = [0]*(len(tab) + 4)
+            s = 0
+            for i in range(nb_points+1) : 
+                if list_new_values[i] in list_values : 
+                    for j in range(4):
+                        new_tab[i*4 + j] = tab[s*4 + j]
+                    s += 1
+                else : 
+                    new_tab[i*4] = new_value 
+                    rgb = color_transfer_object.GetColor(new_value)
+                    for j in range(3) : 
+                        new_tab[(i*4) + j+1] = rgb[j]
+        else : 
+            new_tab = tab
+        m.RGBPoints = new_tab
+        paraview.simple.Render()
+
+
+
+    new_interactor = vtkInteractorStyleUser()
+
+    # To keep the classic interactor, we have to put it into sys.modules. Thanks to that, we can go back at it anytime we want to.
+    # If we don't put the function leftDown into sys.modules, Paraview deletes it and it crashes.
+    interactor_class = namedtuple('interactor_class', ['f', 'i'])
+    sys.modules['interactor'] = interactor_class(leftDown, basic_interactor) 
+
+    import interactor
+
+    new_interactor.AddObserver("LeftButtonPressEvent", interactor.f)
+
+    paraview.servermanager.GetRenderView().GetInteractor().SetInteractorStyle(new_interactor) 
+
+else: #to go back in normal mode 
+    import interactor #we import the basic interactor that we saved before 
+    basic_interactor = interactor.i
+    paraview.servermanager.GetRenderView().GetInteractor().SetInteractorStyle(basic_interactor)
+    del sys.modules['interactor'] #we have to delete the key in sys.modules so we can create it again if we want to.
