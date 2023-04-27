@@ -1,7 +1,6 @@
 # About
 
 This is a Python script for a new macro in Paraview which allow the user to add a new value (with a new color) on the contour when he clicks on a point into a figure.
-This macro must be used with the Paraview CGNS reader `pvpycgnsreader.py`.
 
 
 # Using
