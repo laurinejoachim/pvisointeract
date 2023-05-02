@@ -1,10 +1,10 @@
 from vtkmodules.vtkInteractionStyle import vtkInteractorStyleUser
-from vtkmodules.vtkRenderingCore import vtkCellPicker, vtkColorTransferFunction
+from vtkmodules.vtkRenderingCore import vtkCellPicker, vtkPointPicker, vtkColorTransferFunction
 import paraview.servermanager
 import paraview.simple
 from collections import namedtuple
 import sys
-
+import numpy as np
 class _State : 
     def __init__(self, function, observer): 
         self.function = function 
@@ -13,24 +13,51 @@ class _State :
 color_space = {'RGB' : 0, 'HSV' : 1, 'CIELAB' : 2, 'Diverging' : 3, 'Step' : 4}
 
 if 'interactor' not in sys.modules : #if we are in normal mode 
+    print('iso_interactor is on')
     basic_interactor = paraview.servermanager.GetRenderView().GetInteractor().GetInteractorStyle()
 
     def leftDown(arg1, arg2):
         (x, y) = arg1.GetInteractor().GetEventPosition()
-        cellPicker = vtkCellPicker()
+        
         ren = paraview.servermanager.GetRenderView().GetRenderer()
-        cellPicker.Pick(x,y,0,ren)
-        cell_id = cellPicker.GetCellId()
-        block_index = cellPicker.GetFlatBlockIndex()
-        act = cellPicker.GetActors()
-        map = act.GetItemAsObject(0).GetMapper()
-        block = map.GetInputDataObject(0,0).GetBlock(block_index-1)
-        mode = paraview.simple.GetDisplayProperties().ColorArrayName[0]
         array_name = paraview.simple.GetDisplayProperties().ColorArrayName[1]
+        mode = paraview.simple.GetDisplayProperties().ColorArrayName[0]
         if mode == 'CELLS' : 
-            new_value = block.GetCellData().GetArray(array_name).GetValue(cell_id)
+            cellPicker = vtkCellPicker()
+            cellPicker.Pick(x,y,0,ren)
+            cell_id = cellPicker.GetCellId() 
+            block_index = cellPicker.GetFlatBlockIndex()
+            act = cellPicker.GetActors()
+            if act.GetItemAsObject(0) == None : #click outside the figure 
+                return None
+            map = act.GetItemAsObject(0).GetMapper()
+            block = map.GetInputDataObject(0,0).GetBlock(block_index-1)  
+            value_index = map.GetLookupTable().GetVectorComponent()
+            vector_mode = map.GetLookupTable().GetVectorMode()
+            if map.GetLookupTable().GetVectorMode() == 0 :
+                tupl = block.GetCellData().GetArray(array_name).GetTuple(cell_id)
+                new_value = np.linalg.norm(tupl)
+            elif map.GetLookupTable().GetVectorMode() == 1 :  
+                new_value = block.GetCellData().GetArray(array_name).GetTuple(cell_id)[value_index]
+
         elif mode == 'POINTS' : 
-            new_value = block.GetPointData().GetArray(array_name).GetValue(cell_id)
+            pointPicker = vtkPointPicker()
+            pointPicker.Pick(x,y,0,ren)
+            point_id = pointPicker.GetPointId() 
+            block_index = pointPicker.GetFlatBlockIndex()
+            act = pointPicker.GetActors()
+            if act.GetItemAsObject(0) == None : #click outside the figure 
+                return None
+            map = act.GetItemAsObject(0).GetMapper()
+            block = map.GetInputDataObject(0,0).GetBlock(block_index-1)  
+            value_index = map.GetLookupTable().GetVectorComponent()
+            vector_mode = map.GetLookupTable().GetVectorMode()
+            if map.GetLookupTable().GetVectorMode() == 0 :
+                tupl = block.GetPointData().GetArray(array_name).GetTuple(point_id)
+                new_value = np.linalg.norm(tupl)
+            elif map.GetLookupTable().GetVectorMode() == 1 :  
+                new_value = block.GetPointData().GetArray(array_name).GetTuple(point_id)[value_index]
+
         m = paraview.simple.GetColorTransferFunction(paraview.simple.GetDisplayProperties().ColorArrayName[1])
 
         # we create a new color transfert object which is a copy of the original one, so we can add the new color in it after
@@ -75,6 +102,7 @@ if 'interactor' not in sys.modules : #if we are in normal mode
 
 
 else: #to go back in normal mode 
+    print('iso_interactor is off')
     import interactor #we import the variable that we saved before 
     basic_interactor = paraview.servermanager.GetRenderView().GetInteractor().GetInteractorStyle()
     basic_interactor.RemoveObserver(interactor.observer)
