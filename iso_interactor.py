@@ -5,13 +5,18 @@ import paraview.simple
 from collections import namedtuple
 import sys
 
+class _State : 
+    def __init__(self, function, observer): 
+        self.function = function 
+        self.observer = observer
+
 color_space = {'RGB' : 0, 'HSV' : 1, 'CIELAB' : 2, 'Diverging' : 3, 'Step' : 4}
 
 if 'interactor' not in sys.modules : #if we are in normal mode 
     basic_interactor = paraview.servermanager.GetRenderView().GetInteractor().GetInteractorStyle()
 
     def leftDown(arg1, arg2):
-        (x, y) = arg1.GetLastPos()
+        (x, y) = arg1.GetInteractor().GetEventPosition()
         cellPicker = vtkCellPicker()
         ren = paraview.servermanager.GetRenderView().GetRenderer()
         cellPicker.Pick(x,y,0,ren)
@@ -26,7 +31,6 @@ if 'interactor' not in sys.modules : #if we are in normal mode
             new_value = block.GetCellData().GetArray(array_name).GetValue(cell_id)
         elif mode == 'POINTS' : 
             new_value = block.GetPointData().GetArray(array_name).GetValue(cell_id)
-
         m = paraview.simple.GetColorTransferFunction(paraview.simple.GetDisplayProperties().ColorArrayName[1])
 
         # we create a new color transfert object which is a copy of the original one, so we can add the new color in it after
@@ -60,23 +64,18 @@ if 'interactor' not in sys.modules : #if we are in normal mode
         m.RGBPoints = new_tab
         paraview.simple.Render()
 
-
-
-    new_interactor = vtkInteractorStyleUser()
-
-    # To keep the classic interactor, we have to put it into sys.modules. Thanks to that, we can go back at it anytime we want to.
     # If we don't put the function leftDown into sys.modules, Paraview deletes it and it crashes.
-    interactor_class = namedtuple('interactor_class', ['f', 'i'])
-    sys.modules['interactor'] = interactor_class(leftDown, basic_interactor) 
+    sys.modules['interactor'] = _State(leftDown, None) 
 
     import interactor
 
-    new_interactor.AddObserver("LeftButtonPressEvent", interactor.f)
+    #We add the new observer to create the iso
+    #we keep the variable returned by AddObserver so we will be able to go back in basic mode later 
+    interactor.observer = basic_interactor.AddObserver("LeftButtonPressEvent", interactor.function)
 
-    paraview.servermanager.GetRenderView().GetInteractor().SetInteractorStyle(new_interactor) 
 
 else: #to go back in normal mode 
-    import interactor #we import the basic interactor that we saved before 
-    basic_interactor = interactor.i
-    paraview.servermanager.GetRenderView().GetInteractor().SetInteractorStyle(basic_interactor)
+    import interactor #we import the variable that we saved before 
+    basic_interactor = paraview.servermanager.GetRenderView().GetInteractor().GetInteractorStyle()
+    basic_interactor.RemoveObserver(interactor.observer)
     del sys.modules['interactor'] #we have to delete the key in sys.modules so we can create it again if we want to.
