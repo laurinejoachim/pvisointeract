@@ -10,7 +10,7 @@ class _State :
         self.function = function 
         self.observer = observer
 
-color_space = {'RGB' : 0, 'HSV' : 1, 'CIELAB' : 2, 'Diverging' : 3, 'Step' : 4}
+color_space = {'RGB' : 0, 'HSV' : 1, 'CIELAB' : 2, 'Diverging' : 3, 'Step' : 4, 'Lab' : 5}
 
 if 'interactor' not in sys.modules : #if we are in normal mode 
     print('iso_interactor is on')
