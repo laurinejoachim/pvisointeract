@@ -100,6 +100,7 @@ def add_val_in_color_transfert_function(new_value, color_func_proxy):
 
 
 def left_button_press_event(arg1, arg2):
+    arg1.OnLeftButtonDown()
     x, y = arg1.GetInteractor().GetEventPosition()
     ren = paraview.servermanager.GetRenderView().GetRenderer()
     array_name = paraview.simple.GetDisplayProperties().ColorArrayName[1]
@@ -141,3 +142,4 @@ else:  # to go back in normal mode
     basic_interactor.RemoveObserver(interactor.observer)
     # we have to delete the key in sys.modules so we can create it again if we want to.
     del sys.modules["interactor"]
+    
