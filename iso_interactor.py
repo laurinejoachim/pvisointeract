@@ -1,8 +1,8 @@
 import sys
 from vtkmodules.vtkInteractionStyle import vtkInteractorStyleUser
+from vtkmodules.vtkCommonCore import vtkIdList
 from vtkmodules.vtkRenderingCore import (
     vtkCellPicker,
-    vtkPointPicker,
     vtkColorTransferFunction,
 )
 import paraview.servermanager
@@ -40,16 +40,40 @@ def new_val_cell(x, y, array_name, ren):
     return new_value
 
 
+def get_point_id(block, cell_id):
+    list_points_id = []
+    pts_ids = vtkIdList()
+    block.GetCellPoints(cell_id, pts_ids)
+    nb_pts = pts_ids.GetNumberOfIds()
+    for i in range(nb_pts):
+        list_points_id.append(pts_ids.GetId(i))
+    return list_points_id
+
+
+def get_closer_point(list_points_id, cell_picker, block):
+    coord_picked_point = np.array(cell_picker.GetPickPosition())
+    dists = []
+    for pt_id in list_points_id:
+        coord_pt = np.array(block.GetPoint(pt_id))
+        dists.append(np.linalg.norm(coord_picked_point - coord_pt))
+    point_id = list_points_id[np.array(dists).argmin()]
+    return point_id
+
+
 def new_val_point(x, y, array_name, ren):
-    point_picker = vtkPointPicker()
-    point_picker.Pick(x, y, 0, ren)
-    point_id = point_picker.GetPointId()
-    block_index = point_picker.GetFlatBlockIndex()
-    act = point_picker.GetActors()
+    cell_picker = vtkCellPicker()
+    cell_picker.Pick(x, y, 0, ren)
+    cell_id = cell_picker.GetCellId()
+    block_index = cell_picker.GetFlatBlockIndex()
+    act = cell_picker.GetActors()
     if act.GetItemAsObject(0) is None:  # click outside the figure
         return None
     mapper = act.GetItemAsObject(0).GetMapper()
     block = mapper.GetInputDataObject(0, 0).GetBlock(block_index - 1)
+    #we have to find the points which belongs to the clicked cell 
+    list_points_id = get_point_id(block, cell_id)
+    #then we choose the closer point to the picked cell 
+    point_id = get_closer_point(list_points_id, cell_picker, block)
     value_index = mapper.GetLookupTable().GetVectorComponent()
     if mapper.GetLookupTable().GetVectorMode() == 0:
         tupl = block.GetPointData().GetArray(array_name).GetTuple(point_id)
@@ -112,7 +136,10 @@ def left_button_press_event(interactor_style, event):
     color_func_proxy = paraview.simple.GetColorTransferFunction(
         paraview.simple.GetDisplayProperties().ColorArrayName[1]
     )
-    add_val_in_color_transfert_function(new_value, color_func_proxy)
+    if new_value is None:
+        return None
+    else:
+        add_val_in_color_transfert_function(new_value, color_func_proxy)
 
 
 if "interactor" not in sys.modules:  # if we are in normal mode
