@@ -1,10 +1,7 @@
 import sys
 from vtkmodules.vtkInteractionStyle import vtkInteractorStyleUser
 from vtkmodules.vtkCommonCore import vtkIdList
-from vtkmodules.vtkRenderingCore import (
-    vtkCellPicker,
-    vtkColorTransferFunction,
-)
+from vtkmodules.vtkRenderingCore import vtkCellPicker, vtkColorTransferFunction
 import paraview.servermanager
 import paraview.simple
 import numpy as np
@@ -20,12 +17,14 @@ COLOR_SPACE = {"RGB": 0, "HSV": 1, "CIELAB": 2, "Diverging": 3, "Step": 4, "Lab"
 
 
 def new_val_cell(x, y, array_name, ren):
+    """Return a new value for a picked cell in CELLS mode."""
     cell_picker = vtkCellPicker()
     cell_picker.Pick(x, y, 0, ren)
     cell_id = cell_picker.GetCellId()
     block_index = cell_picker.GetFlatBlockIndex()
     act = cell_picker.GetActors()
-    if act.GetItemAsObject(0) is None:  # click outside the figure
+    # Click outside the figure:
+    if act.GetItemAsObject(0) is None:
         return None
     mapper = act.GetItemAsObject(0).GetMapper()
     block = mapper.GetInputDataObject(0, 0).GetBlock(block_index - 1)
@@ -41,6 +40,7 @@ def new_val_cell(x, y, array_name, ren):
 
 
 def get_point_id(block, cell_id):
+    """Return a list with all the points ids which belongs to the clicked cell."""
     list_points_id = []
     pts_ids = vtkIdList()
     block.GetCellPoints(cell_id, pts_ids)
@@ -50,7 +50,8 @@ def get_point_id(block, cell_id):
     return list_points_id
 
 
-def get_closer_point(list_points_id, cell_picker, block):
+def get_nearest_point(list_points_id, cell_picker, block):
+    """Return the id of the nearest point of the picked cell."""
     coord_picked_point = np.array(cell_picker.GetPickPosition())
     dists = []
     for pt_id in list_points_id:
@@ -61,6 +62,9 @@ def get_closer_point(list_points_id, cell_picker, block):
 
 
 def new_val_point(x, y, array_name, ren):
+    """To find a new value in POINTS mode we can not use the point picker
+    because it returns a wrong point id : we use a cell picker and we
+    are going to find the right point id from this cell picker."""
     cell_picker = vtkCellPicker()
     cell_picker.Pick(x, y, 0, ren)
     cell_id = cell_picker.GetCellId()
@@ -70,10 +74,10 @@ def new_val_point(x, y, array_name, ren):
         return None
     mapper = act.GetItemAsObject(0).GetMapper()
     block = mapper.GetInputDataObject(0, 0).GetBlock(block_index - 1)
-    #we have to find the points which belongs to the clicked cell 
+    # We have to find the points which belongs to the clicked cell:
     list_points_id = get_point_id(block, cell_id)
-    #then we choose the closer point to the picked cell 
-    point_id = get_closer_point(list_points_id, cell_picker, block)
+    # Then we choose the nearest point of the picked cell:
+    point_id = get_nearest_point(list_points_id, cell_picker, block)
     value_index = mapper.GetLookupTable().GetVectorComponent()
     if mapper.GetLookupTable().GetVectorMode() == 0:
         tupl = block.GetPointData().GetArray(array_name).GetTuple(point_id)
@@ -86,8 +90,10 @@ def new_val_point(x, y, array_name, ren):
 
 
 def add_val_in_color_transfert_function(new_value, color_func_proxy):
-    # we create a new color transfert function which is a copy of the original one, so we can
-    # add the new color in it after
+    """We add the new value and the associated color (found into the proxy)
+    into the color transfert function."""
+    # We create a new color transfert function which is a copy of the original
+    # one, so we can add the new color in it after:
     color_func = vtkColorTransferFunction()
     color_func.SetColorSpace(COLOR_SPACE[color_func_proxy.ColorSpace.GetElement(0)])
     for i in range(int(len(color_func_proxy.RGBPoints) / 4)):
@@ -124,6 +130,8 @@ def add_val_in_color_transfert_function(new_value, color_func_proxy):
 
 
 def left_button_press_event(interactor_style, event):
+    """Describe what happend when we press the left button of the mouse."""
+    # We keep the initial functionalities of the event:
     interactor_style.OnLeftButtonDown()
     x, y = interactor_style.GetInteractor().GetEventPosition()
     ren = paraview.servermanager.GetRenderView().GetRenderer()
@@ -138,8 +146,7 @@ def left_button_press_event(interactor_style, event):
     )
     if new_value is None:
         return None
-    else:
-        add_val_in_color_transfert_function(new_value, color_func_proxy)
+    add_val_in_color_transfert_function(new_value, color_func_proxy)
 
 
 if "interactor" not in sys.modules:  # if we are in normal mode
@@ -148,24 +155,25 @@ if "interactor" not in sys.modules:  # if we are in normal mode
         paraview.servermanager.GetRenderView().GetInteractor().GetInteractorStyle()
     )
     # If we don't put the function left_button_press_event into sys.modules,
-    # Paraview deletes it and it crashes.
+    # Paraview deletes it and it crashes:
     sys.modules["interactor"] = _State(left_button_press_event, None)
 
     import interactor
 
-    # We add the new observer to create the iso
-    # we keep the variable returned by AddObserver so we will be able to go back in basic mode later
+    # We add the new observer to create the iso and we keep the variable
+    # returned by AddObserver so we will be able to go back in basic mode later:
     interactor.observer = basic_interactor.AddObserver(
         "LeftButtonPressEvent", interactor.function
     )
 
 else:  # to go back in normal mode
     print("iso_interactor is off")
-    import interactor  # we import the variable that we saved before
+    # We import the variable that we saved before:
+    import interactor
 
     basic_interactor = (
         paraview.servermanager.GetRenderView().GetInteractor().GetInteractorStyle()
     )
     basic_interactor.RemoveObserver(interactor.observer)
-    # we have to delete the key in sys.modules so we can create it again if we want to.
+    # We have to delete the key in sys.modules so we can create it again if we want to:
     del sys.modules["interactor"]
