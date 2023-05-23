@@ -7,4 +7,5 @@ This is a Python script for a new macro in Paraview which allow the user to add 
 
 To use this macro in Paraview load `iso_interactor.py` as a macro using `Import new macro` from `Macro > Import new macro`. Then, the name of the macro will appared on the tool bar. To activate or desactivate the mode, click on the button with the name on the tool bar.
 
-
+# Demo Video
+![](https://github.com/laurinejoachim/pvisointeract/assets/130443463/bd7d1568-0393-4123-95c8-2bd28eefdb89)
